@@ -1,4 +1,4 @@
-import numpy as np  # Fix numpy import
+import numpy as np
 import matplotlib.pyplot as plt
 import networkx as nx
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
@@ -118,148 +118,172 @@ def greedy_human_heuristic(data):
 
 def optimize_routes(data):
     """Solve the VRP using OR-Tools."""
-    manager = pywrapcp.RoutingIndexManager(
-        len(data["distance_matrix"]),
-        data["num_vehicles"],
-        data["starts"],
-        data["ends"]
-    )
-    routing = pywrapcp.RoutingModel(manager)
+    try:
+        # Validate input data
+        if not data or "distance_matrix" not in data:
+            print("Invalid input data")
+            return None, 0
 
-    def distance_callback(from_index, to_index):
-        from_node = manager.IndexToNode(from_index)
-        to_node = manager.IndexToNode(to_index)
-        return int(data["distance_matrix"][from_node][to_node])
+        manager = pywrapcp.RoutingIndexManager(
+            len(data["distance_matrix"]),
+            data["num_vehicles"],
+            data["starts"],
+            data["ends"]
+        )
+        routing = pywrapcp.RoutingModel(manager)
 
-    transit_callback_index = routing.RegisterTransitCallback(distance_callback)
-    routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
+        def distance_callback(from_index, to_index):
+            try:
+                from_node = manager.IndexToNode(from_index)
+                to_node = manager.IndexToNode(to_index)
+                return int(data["distance_matrix"][from_node][to_node])
+            except Exception as e:
+                print(f"Error in distance_callback: {e}")
+                return 0
 
-    def demand_callback(from_index):
-        from_node = manager.IndexToNode(from_index)
-        return data["package_demands"][from_node]
+        transit_callback_index = routing.RegisterTransitCallback(distance_callback)
+        routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
 
-    demand_callback_index = routing.RegisterUnaryTransitCallback(demand_callback)
-    routing.AddDimensionWithVehicleCapacity(
-        demand_callback_index,
-        0,  # null capacity slack
-        data['vehicle_capacities'],  # vehicle maximum capacities
-        True,  # start cumul to zero
-        'Capacity'
-    )
+        # Add Capacity constraint
+        def demand_callback(from_index):
+            try:
+                from_node = manager.IndexToNode(from_index)
+                return data["package_demands"][from_node]
+            except Exception as e:
+                print(f"Error in demand_callback: {e}")
+                return 0
 
-    def time_callback(from_index, to_index):
-        from_node = manager.IndexToNode(from_index)
-        to_node = manager.IndexToNode(to_index)
-        return int(data["distance_matrix"][from_node][to_node] / 
-                  data["vehicle_speeds"][manager.VehicleIndex(from_index)])
+        demand_callback_index = routing.RegisterUnaryTransitCallback(demand_callback)
+        routing.AddDimensionWithVehicleCapacity(
+            demand_callback_index,
+            0,  # null capacity slack
+            data['vehicle_capacities'],  # vehicle maximum capacities
+            True,  # start cumul to zero
+            'Capacity'
+        )
 
-    time_callback_index = routing.RegisterTransitCallback(time_callback)
-    routing.AddDimension(
-        time_callback_index,
-        0,  # no slack
-        1000,  # maximum time per vehicle
-        True,  # start cumul to zero
-        'Time'
-    )
+        # Add Time constraint
+        def time_callback(from_index, to_index):
+            try:
+                from_node = manager.IndexToNode(from_index)
+                to_node = manager.IndexToNode(to_index)
+                return int(data["distance_matrix"][from_node][to_node] / 
+                         data["vehicle_speeds"][manager.VehicleIndex(from_index)])
+            except Exception as e:
+                print(f"Error in time_callback: {e}")
+                return 0
 
-    time_dimension = routing.GetDimensionOrDie('Time')
-    for location_idx, time_window in enumerate(data['time_windows']):
-        if location_idx in data['starts']:
-            continue
-        index = manager.NodeToIndex(location_idx)
-        time_dimension.CumulVar(index).SetRange(time_window[0], time_window[1])
+        time_callback_index = routing.RegisterTransitCallback(time_callback)
+        routing.AddDimension(
+            time_callback_index,
+            0,  # no slack
+            1000,  # maximum time per vehicle
+            True,  # start cumul to zero
+            'Time'
+        )
 
-    search_parameters = pywrapcp.DefaultRoutingSearchParameters()
-    search_parameters.first_solution_strategy = (
-        routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC)
-    search_parameters.local_search_metaheuristic = (
-        routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH)
-    search_parameters.time_limit.seconds = 30
+        # Add Time Windows constraint
+        time_dimension = routing.GetDimensionOrDie('Time')
+        for location_idx, time_window in enumerate(data['time_windows']):
+            if location_idx in data['starts']:
+                continue
+            index = manager.NodeToIndex(location_idx)
+            time_dimension.CumulVar(index).SetRange(time_window[0], time_window[1])
 
-    solution = routing.SolveWithParameters(search_parameters)
-    if not solution:
-        return None
+        # Set search parameters
+        search_parameters = pywrapcp.DefaultRoutingSearchParameters()
+        search_parameters.first_solution_strategy = (
+            routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC)
+        search_parameters.local_search_metaheuristic = (
+            routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH)
+        search_parameters.time_limit.seconds = 30
 
-    routes = {}
-    for vehicle_id in range(data["num_vehicles"]):
-        index = routing.Start(vehicle_id)
-        route = []
-        while not routing.IsEnd(index):
-            route.append(manager.IndexToNode(index))
-            index = solution.Value(routing.NextVar(index))
-        route.append(manager.IndexToNode(index))
-        routes[vehicle_id] = route
+        # Solve and validate solution
+        solution = routing.SolveWithParameters(search_parameters)
+        if not solution:
+            print("No solution found")
+            return None, 0
 
-    total_optimized_distance = 0
-    for route in routes.values():
-        for i in range(len(route) - 1):
-            total_optimized_distance += data["distance_matrix"][route[i]][route[i + 1]]
+        # Extract routes safely
+        routes = {}
+        total_optimized_distance = 0
 
-    return routes, total_optimized_distance
+        try:
+            for vehicle_id in range(data["num_vehicles"]):
+                index = routing.Start(vehicle_id)
+                route = []
+                
+                while not routing.IsEnd(index):
+                    node_index = manager.IndexToNode(index)
+                    route.append(node_index)
+                    index = solution.Value(routing.NextVar(index))
+                        
+                route.append(manager.IndexToNode(index))
+                routes[vehicle_id] = route
+
+                # Calculate distance for this route
+                for i in range(len(route) - 1):
+                    total_optimized_distance += data["distance_matrix"][route[i]][route[i + 1]]
+
+            return routes, total_optimized_distance
+
+        except Exception as e:
+            print(f"Error extracting solution: {e}")
+            return None, 0
+
+    except Exception as e:
+        print(f"Error in optimize_routes: {e}")
+        return None, 0
 
 def visualize_routes(data, routes, title, filename):
     """Visualize routes."""
     try:
-        # Clear any existing plots
+        # Clear any existing plots and memory
         plt.clf()
         plt.close('all')
         
-        # Create new figure
-        fig, ax = plt.subplots(figsize=(15, 10))
+        # Create figure
+        fig = plt.figure(figsize=(15, 10))
+        ax = fig.add_subplot(111)
         
         # Prepare coordinates
         cities = list(data['locations'].keys())
-        lons = []
-        lats = []
-        for city in cities:
-            lat, lon = data['locations'][city]
-            lats.append(lat)
-            lons.append(lon)
+        lons = [data['locations'][city][1] for city in cities]
+        lats = [data['locations'][city][0] for city in cities]
         
-        # Plot cities with larger markers
-        ax.scatter(lons, lats, c='lightblue', s=500, zorder=2)
+        # Plot cities
+        ax.scatter(lons, lats, c='lightblue', s=700, zorder=1)
         
-        # Add city labels with offset
+        # Add city labels
         for city, lon, lat in zip(cities, lons, lats):
-            ax.annotate(city, (lon, lat), 
-                       xytext=(5, 5), 
-                       textcoords='offset points',
-                       fontsize=8)
+            ax.annotate(city, (lon, lat), xytext=(5, 5), textcoords='offset points')
         
-        # Draw routes
+        # Draw routes for each vehicle
         colors = ['red', 'green', 'blue', 'yellow', 'cyan']
-        
         for vehicle_id, route in routes.items():
             color = colors[vehicle_id % len(colors)]
-            
-            # Draw route segments
             for i in range(len(route) - 1):
                 from_city = cities[route[i]]
                 to_city = cities[route[i + 1]]
-                
                 x = [data['locations'][from_city][1], data['locations'][to_city][1]]
                 y = [data['locations'][from_city][0], data['locations'][to_city][0]]
+                ax.plot(x, y, c=color, linewidth=2, zorder=2)
                 
-                # Draw line
-                ax.plot(x, y, c=color, linewidth=1.5, zorder=1)
-                
-                # Add vehicle label at midpoint
-                mid_x = sum(x) / 2
-                mid_y = sum(y) / 2
-                ax.annotate(f'V{vehicle_id + 1}', 
-                           (mid_x, mid_y),
+                # Add vehicle labels
+                mid_x = (x[0] + x[1]) / 2
+                mid_y = (y[0] + y[1]) / 2
+                ax.annotate(f'V{vehicle_id + 1}', (mid_x, mid_y), 
                            bbox=dict(facecolor='white', alpha=0.7),
-                           fontsize=6,
-                           ha='center')
+                           ha='center', va='center')
         
         # Set title and grid
         plt.title(title)
-        plt.grid(True, linestyle='--', alpha=0.7)
+        plt.grid(True)
         
-        # Adjust margins and limits
+        # Adjust limits with padding
         plt.margins(0.1)
         
-        # Save figure
+        # Save and close
         plt.savefig(filename, bbox_inches='tight', dpi=300)
         plt.close(fig)
         
@@ -268,6 +292,7 @@ def visualize_routes(data, routes, title, filename):
     except Exception as e:
         print(f"Error in visualization: {str(e)}")
         plt.close('all')
+
 def main():
     # Create data model
     data = create_data_model()

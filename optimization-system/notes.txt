@@ -1,0 +1,19 @@
+solve the problem of high demand in dense urban areas
+
+seasonal demand
+delever in 8:00 to 10:00
+
+
+
+
+if we use the grep command to search for the word "demand" in the file notes.txt, we will get the following output:
+each driver has a limited number of hours to work each day, so we need to make sure that we can meet the demand for our services without overworking our drivers.
+lets imagine three vehicles so each deliver in the greddy nearest city so it take 8 hours and with the optimizaed the solutin it make it 7:30 hours
+image we have 10 vehicles with routes like that so we can save 300/60 = 5 hours each day and imagine in a week or a month how much we can save or there is more vehicules
+trad_tim - optimzed / 100  
+and we draw a graph of the time saved in the y-axis and the number of vehicles in the x-axis...... or something like taht 
+-we didn't talk about seasonal demand i think
+_we needd to add real data of some enterprise before and after or something like that
+
+
+we must include sources for our talk optimize 25% ..
