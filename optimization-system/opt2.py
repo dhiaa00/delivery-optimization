@@ -30,6 +30,13 @@ def create_data_model():
     }
     return data
 
+# Calculate Total Distance Function
+def calculate_total_distance(route, distance_matrix):
+    total_distance = 0
+    for i in range(len(route) - 1):
+        total_distance += distance_matrix[route[i]][route[i + 1]]
+    return total_distance
+
 # Human Heuristic Route
 def human_greedy_routes(data):
     distance_matrix = np.array(data['distance_matrix'])
@@ -40,7 +47,6 @@ def human_greedy_routes(data):
         current = start
         route = [current]
         visited.add(current)
-        distance = 0
         while len(visited) < len(distance_matrix):
             nearest_city = None
             min_distance = float('inf')
@@ -52,11 +58,10 @@ def human_greedy_routes(data):
                 break
             route.append(nearest_city)
             visited.add(nearest_city)
-            distance += min_distance
             current = nearest_city
         # Return to the hub
-        distance += distance_matrix[current][start]
         route.append(start)
+        distance = calculate_total_distance(route, distance_matrix)
         total_distance += distance
         routes[vehicle_id] = route
     return routes, total_distance

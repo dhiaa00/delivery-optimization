@@ -5,13 +5,15 @@ import networkx as nx
 
 # Step 1: Data Model
 def create_data_model():
-    """Creates the data model for the problem."""
+    """Creates the data model for 
+    the problem."""
     data = {
         "locations": ["Algiers", "Oran", "Constantine", "Tamanrasset", "Béchar", "Tlemcen"],
         "distance_matrix": [
             [0, 4, 6, 24, 20, 7],  # Algiers
             [4, 0, 5, 22, 18, 2],  # Oran
             [6, 5, 0, 23, 19, 4],  # Constantine
+                
             [24, 22, 23, 0, 9, 20],  # Tamanrasset
             [20, 18, 19, 9, 0, 17],  # Béchar
             [7, 2, 4, 20, 17, 0],  # Tlemcen
@@ -45,7 +47,7 @@ def greedy_human_heuristic(data):
                 break
             # Pick the nearest unvisited city
             nearest_city = min(unvisited, key=lambda city: distance_matrix[current_city][city])
-            route.append(nearest_city)
+            route.append(nearest_city) 
             visited.add(nearest_city)
             current_city = nearest_city
 
